@@ -83,7 +83,7 @@ if __name__=='__main__':
     parser.add_argument('--norm',       type=str,   default=None,   help='sparse vectors norm: l1, l2 or None')
     parser.add_argument('--nhid',       type=int,   default=256,    help='number of hiddens')
     parser.add_argument('--scale',      type=float, default=255,    help='scale of dense data')
-    parser.add_argument('--snapshot',   type=int,   default=25,     help='iteration period for snapshot')
+    parser.add_argument('--snapshot',   type=int,   default=25,     help='snapshot iterstep')
     parser.add_argument('--shuffle',    action='store_true',        help='shuffle after each epoch')
     parser.add_argument('--sparse',     action='store_true',        help='data is sparse.NPZ')
     parser.add_argument('--test',       action='store_true',        help='validate on 5%%-subset')

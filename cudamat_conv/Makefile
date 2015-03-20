@@ -12,7 +12,7 @@ libcudamat_conv.so: cudamat_conv.cu cudamat_conv_kernels.cu cudamat_conv.cuh cud
 		-gencode=arch=compute_50,code=sm_50 \
 		-gencode=arch=compute_50,code=compute_50 \
 		--compiler-options '-fPIC' -o libcudamat_conv.so \
-		--shared cudamat_conv.cu cudamat_conv_kernels.cu -lcublas -L$(CUDA_LIB)
+		--shared cudamat_conv.cu cudamat_conv_kernels.cu -lcublas
 
 clean:
 	rm -rf *.pyc *.so

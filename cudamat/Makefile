@@ -1,8 +1,7 @@
 all: libcudamat.so
 
 libcudamat.so: cudamat.cu cudamat_kernels.cu cudamat.cuh cudamat_kernels.cuh
-	nvcc -O3 \
-		-v \
+	nvcc -O3 -v \
 		-gencode=arch=compute_11,code=sm_11 \
 		-gencode=arch=compute_20,code=sm_20 \
 		-gencode=arch=compute_30,code=sm_30 \
@@ -12,7 +11,7 @@ libcudamat.so: cudamat.cu cudamat_kernels.cu cudamat.cuh cudamat_kernels.cuh
 		-gencode=arch=compute_50,code=sm_50 \
 		-gencode=arch=compute_50,code=compute_50 \
 		--compiler-options '-fPIC' -o libcudamat.so \
-		--shared cudamat.cu cudamat_kernels.cu -lcublas -L$(CUDA_LIB)
+		--shared cudamat.cu cudamat_kernels.cu -lcublas
 
 clean:
 	rm -rf *.pyc *.so

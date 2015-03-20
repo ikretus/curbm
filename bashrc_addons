@@ -1,0 +1,16 @@
+alias l='ls -l'
+alias ll='ls -alF'
+alias topu='top -U $USER'
+
+CUDA_ROOT=/usr/local/cuda
+CUDA_BIN=$CUDA_ROOT/bin
+CUDA_LIB=$CUDA_ROOT/lib64
+
+CAFFE=$HOME/dev/caffe/python
+CURBM=$HOME/dev/curbm
+SKLEARN=$HOME/dev/scikit-learn
+
+export CPATH=$CUDA_ROOT/include:$CPATH
+export LD_LIBRARY_PATH=/usr/local/lib:$CUDA_LIB:$CURBM/cudamat:$LD_LIBRARY_PATH
+export PATH=$CUDA_BIN:$PATH
+export PYTHONPATH=$CURBM:$CAFFE:$SKLEARN:$PYTHONPATH

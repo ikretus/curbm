@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
-import h5py, os, sys
+import h5py
+import os
+import sys
 import numpy as np
 #
 ########################################################################
