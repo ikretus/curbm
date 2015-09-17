@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 import argparse
+import cPickle
+import gzip
 import os
 import sys
 import time
 import numpy as np
 import scipy.sparse as spsp
-#import matplotlib.pyplot as pl
-#from scipy.io import loadmat, savemat
-from sklearn.preprocessing import normalize
+from sklearn.feature_extraction.text import TfidfTransformer
 #
-CNT_LOG_MAX = np.log(10**5)
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as pl
+#
 MAX_CPU_FLOATS = 2**30
 MAX_GPU_MEMORY = 2**30
 CUDAMAT_INIT = True
@@ -51,51 +54,52 @@ def loadWeights(fn):
 def free_energy(W, a, b, v):
     return (np.dot(a.T, v) + np.log(1 + np.exp(np.dot(W.T, v) + b)).sum(0))
 
-    '''
-def plot_pictures(v, fn='plot.png'):
+def plot(W, fn='plot.png'):
+    isz, sz = int(np.sqrt(np.ceil(np.sqrt(W.shape[0]))**2)), int(np.sqrt(W.shape[1]))
+    if W.shape[0] != isz * isz:
+        v = np.vstack((W, np.zeros((isz * isz - W.shape[0], W.shape[1]))))
+    else:
+        v = W
+    v = (v - v.min()) / (v.max() - v.min())
+    fbank = np.hstack( \
+                np.hstack(( \
+                    np.vstack(np.vstack((v[:,i + sz*k].reshape(isz, isz), np.zeros((20, isz)))) for i in xrange(sz)), \
+                    np.zeros((sz*(isz + 20), 20)) )) for k in xrange(sz) )
+    pl.imsave(fn, fbank, cmap=pl.cm.Greys_r, dpi=300)
 
-    img_size = int(np.sqrt(v.shape[0]))
-    size = int(np.sqrt(v.shape[1]))
-    plot = np.hstack(np.vstack(v[:,i + size * k].reshape(img_size, img_size) \
-               for i in xrange(size)) \
-                   for k in xrange(size))
-    pl.imsave(fn, plot, cmap=pl.cm.Greys_r, dpi=300)
-
-def save_mat(W, a, b, fn='Wab.mat'):
-    savemat(fn, {'W': W, 'a': a, 'b': b})
-    '''
 ########################################################################
 
 if __name__=='__main__':
-    parser = argparse.ArgumentParser(description='RBM training via cudamat', \
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--batch',      type=int,   default=64,     help='batch size')
-    parser.add_argument('--epochs',     type=int,   default=1000,   help='number of epochs')
-    parser.add_argument('--data',       type=str,   default=None,   help='path/to/data.NPY')
-    parser.add_argument('--dropout',    action='store_true',        help='dropout half of hiddens')
-    parser.add_argument('--gpu',        type=int,   default=0,      help='gpu device id')
-    parser.add_argument('--vis',        type=str,   default='sigm', help='sigm|smax|relu|spls|linr')
-    parser.add_argument('--hid',        type=str,   default='sigm', help='sigm|smax|relu|spls|linr')
-    parser.add_argument('--lr',         type=float, default=0.01,   help='initial lr')
-    parser.add_argument('--l1',         type=float, default=1e-4,   help='L1 weight decay')
-    parser.add_argument('--l2',         type=float, default=1e-4,   help='L2 weight decay')
-    parser.add_argument('--mom',        type=float, default=0.9,    help='initial momentum')
-    parser.add_argument('--norm',       type=str,   default=None,   help='sparse vectors norm: l1, l2 or None')
-    parser.add_argument('--nhid',       type=int,   default=256,    help='number of hiddens')
-    parser.add_argument('--scale',      type=float, default=255,    help='scale of dense data')
-    parser.add_argument('--snapshot',   type=int,   default=25,     help='snapshot iterstep')
-    parser.add_argument('--shuffle',    action='store_true',        help='shuffle after each epoch')
-    parser.add_argument('--sparse',     action='store_true',        help='data is sparse.NPZ')
-    parser.add_argument('--test',       action='store_true',        help='validate on 5%%-subset')
-    parser.add_argument('--trans',      type=str,   default=None,   help='path/to/trans.NPY')
-    parser.add_argument('--weights',    type=str,   default=None,   help='path/to/weights.NPZ')
-    args = parser.parse_args()
+    p = argparse.ArgumentParser(description='RBM training via cudamat', \
+                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument('--batch',    type=int,   default=64,     help='batch size')
+    p.add_argument('--epochs',   type=int,   default=1000,   help='number of epochs')
+    p.add_argument('--data',     type=str,   default=None,   help='path/to/data.NPY')
+    p.add_argument('--dropout',  action='store_true',        help='dropout half of hiddens')
+    p.add_argument('--gpu',      type=int,   default=0,      help='gpu device id')
+    p.add_argument('--vis',      type=str,   default='sigm', help='sigm|smax|relu|spls|linr')
+    p.add_argument('--hid',      type=str,   default='sigm', help='sigm|smax|relu|spls|linr')
+    p.add_argument('--lr',       type=float, default=0.01,   help='initial lr')
+    p.add_argument('--l1',       type=float, default=1e-4,   help='L1 weight decay')
+    p.add_argument('--l2',       type=float, default=1e-4,   help='L2 weight decay')
+    p.add_argument('--mom',      type=float, default=0.9,    help='initial momentum')
+    p.add_argument('--norm',     type=str,   default=None,   help='sparse vectors norm: l1, l2 or None')
+    p.add_argument('--nhid',     type=int,   default=256,    help='number of hiddens')
+    p.add_argument('--scale',    type=float, default=255,    help='scale of dense data')
+    p.add_argument('--snapshot', type=int,   default=25,     help='snapshot iterstep')
+    p.add_argument('--shuffle',  action='store_true',        help='shuffle after each epoch')
+    p.add_argument('--sparse',   action='store_true',        help='data is sparse.NPZ')
+    p.add_argument('--test',     action='store_true',        help='validate on 5%%-subset')
+    p.add_argument('--trans',    type=str,   default=None,   help='path/to/trans.NPY')
+    p.add_argument('--weights',  type=str,   default=None,   help='path/to/weights.NPZ')
+    args = p.parse_args()
 
 ####CUDAMAT initialization
 
     if not CUDAMAT_INIT:
         sys.exit(1)
     else:
+        start_time = time.time()
         cm.cuda_set_device(args.gpu)
         cm.cublas_init()
         cm.CUDAMatrix.init_random( int(time.time()) )
@@ -105,20 +109,21 @@ if __name__=='__main__':
     if not args.sparse:
         data = np.load(os.path.expanduser(args.data))
     else:
+        d_transformer = TfidfTransformer(norm=args.norm, sublinear_tf=True)
+        t_transformer = TfidfTransformer(norm=args.norm, sublinear_tf=True)
+
         fi = np.load(os.path.expanduser(args.data))
-        dc = spsp.coo_matrix((fi['dc_data'], (fi['dc_row'], fi['dc_col'])))
-        tc = spsp.coo_matrix((fi['tc_data'], (fi['tc_row'], fi['tc_col'])))
+        dc = spsp.coo_matrix((fi['dc_data'], (fi['dc_row'], fi['dc_col']))).tocsc()
+        tc = spsp.coo_matrix((fi['tc_data'], (fi['tc_row'], fi['tc_col']))).tocsc()
 
-        dc.data = np.log(1 + dc.data) / CNT_LOG_MAX
-        tc.data = np.log(1 + tc.data) / CNT_LOG_MAX
-
-        if args.norm:
-            data = spsp.csc_matrix(normalize(spsp.hstack((dc, tc)), norm=args.norm).T, dtype=np.float32)
-        else:
-            data = spsp.csc_matrix(spsp.hstack((dc, tc)).T, dtype=np.float32)
+        data = spsp.csc_matrix( \
+                    spsp.hstack((spsp.csc_matrix(fi['age']).T, \
+                                 spsp.csc_matrix(fi['sex']).T, \
+                                 d_transformer.fit_transform(dc), \
+                                 t_transformer.fit_transform(tc))).T, dtype=np.float32)
         del dc, tc
+        cPickle.dump((d_transformer, t_transformer), gzip.open('transformer_%d.gz' % start_time, 'w'))
         print 'loaded data shape = (%d, %d)' % data.shape
-        fi.close()
 
 ####Train/test split
 
@@ -166,10 +171,10 @@ if __name__=='__main__':
 
 ####Initialization
 
-    start_time = time.time()
     print '\n==========< %d >==========\n' % start_time
 
-    n_vis, n_hid = data.shape[0], args.nhid
+    n_vis = data.shape[0]
+    n_hid = args.nhid if not args.weights else W.shape[1]
     print 'number of samples = %d' % data.shape[1]
     print 'vis(%s) = %d -> hid(%s) = %d' % (args.vis, n_vis, args.hid, n_hid)
     print 'dtype = %s, minval = %f, maxval = %f' % (data.dtype, data.min(), data.max())
@@ -316,9 +321,12 @@ if __name__=='__main__':
 
         if epoch % args.snapshot == 0:
             print '\nsnapshotting at epoch %d\n' % epoch
-            np.savez('Wab_%s_%s_%d-%d-%d_%d.npz' % (args.vis, args.hid, n_vis, n_hid, start_time, epoch), \
-                                                    W=W.asarray(), a=a.asarray(), b=b.asarray())
+            signature = (args.vis, args.hid, n_vis, n_hid, start_time, epoch)
+            np.savez('Wab_%s_%s_%d-%d-%d_%d.npz' % signature, W=W.asarray(), a=a.asarray(), b=b.asarray())
+            plot(W.asarray(), 'Wab_%s_%s_%d-%d-%d_%d.png' % signature)
 
     cm.cublas_shutdown()
 
 ########################################################################
+
+
